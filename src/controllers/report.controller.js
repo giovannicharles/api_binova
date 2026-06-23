@@ -1,29 +1,8 @@
 const Report = require('../models/Report');
 const User = require('../models/User');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
-
-// Setup multer
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = 'uploads/reports';
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, `report-${Date.now()}-${Math.round(Math.random() * 1000)}${path.extname(file.originalname)}`);
-  }
-});
-
-const upload = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) cb(null, true);
-    else cb(new Error('Seules les images sont autorisées'));
-  }
-});
+const Bin = require('../models/Bin');
+const Activity = require('../models/Activity');
+const upload = require('../middleware/upload');
 
 exports.uploadMiddleware = upload.array('photos', 5);
 
@@ -31,12 +10,22 @@ exports.uploadMiddleware = upload.array('photos', 5);
 exports.createReport = async (req, res) => {
   try {
     const { title, description, category, priority, latitude, longitude, address, zone, binId } = req.body;
-
+    
     if (!title || !description || !category || !latitude || !longitude || !zone) {
       return res.status(400).json({ success: false, message: 'Champs obligatoires manquants' });
     }
 
-    const photos = req.files ? req.files.map(f => `/uploads/reports/${f.filename}`) : [];
+    // Validate bin exists if provided
+    if (binId) {
+      const bin = await Bin.findById(binId);
+      if (!bin) {
+        return res.status(400).json({ success: false, message: 'Bac introuvable' });
+      }
+    } else {
+      return res.status(400).json({ success: false, message: 'Le bac est obligatoire' });
+    }
+
+    const photos = req.files ? req.files.map(f => f.path) : [];
 
     const report = await Report.create({
       user: req.user._id,
@@ -48,8 +37,17 @@ exports.createReport = async (req, res) => {
       address,
       zone,
       photos,
-      bin: binId || null,
+      bin: binId,
       statusHistory: [{ status: 'pending', changedBy: req.user._id, note: 'Signalement créé' }]
+    });
+
+    // Log activity
+    await Activity.create({
+      user: req.user._id,
+      action: 'report_created',
+      entityType: 'Report',
+      entityId: report._id,
+      details: { title, category, zone }
     });
 
     // Points gamification
@@ -99,6 +97,37 @@ exports.getReports = async (req, res) => {
     res.json({
       success: true,
       data: reports,
+      total,
+      totalPages: Math.ceil(total / limit),
+      page: Number(page),
+      pagination: { total, page: Number(page), pages: Math.ceil(total / limit) }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// GET /api/reports/my (explicitly get my reports)
+exports.getMyReports = async (req, res) => {
+  try {
+    const { page = 1, limit = 20, status } = req.query;
+    const filter = { user: req.user._id };
+    if (status) filter.status = status;
+
+    const reports = await Report.find(filter)
+      .populate('bin', 'name binId zone')
+      .sort({ createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const total = await Report.countDocuments(filter);
+
+    res.json({
+      success: true,
+      data: reports,
+      total,
+      totalPages: Math.ceil(total / limit),
+      page: Number(page),
       pagination: { total, page: Number(page), pages: Math.ceil(total / limit) }
     });
   } catch (error) {
@@ -148,6 +177,15 @@ exports.updateReportStatus = async (req, res) => {
 
     await report.save();
     await report.populate('user assignedTo');
+
+    // Log activity
+    await Activity.create({
+      user: req.user._id,
+      action: 'report_updated',
+      entityType: 'Report',
+      entityId: report._id,
+      details: { prevStatus, newStatus: report.status, note }
+    });
 
     const io = req.app.get('io');
     if (io) io.emit('report:status', { report, prevStatus });

@@ -19,6 +19,36 @@ exports.getBins = async (req, res) => {
     res.json({
       success: true,
       data: bins,
+      total,
+      totalPages: Math.ceil(total / limit),
+      page: Number(page),
+      pagination: { total, page: Number(page), pages: Math.ceil(total / limit) }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// GET /api/bins/my (citizen's bins)
+exports.getMyBins = async (req, res) => {
+  try {
+    const { page = 1, limit = 50 } = req.query;
+    const filter = { owner: req.user._id };
+
+    const bins = await Bin.find(filter)
+      .select('-history')
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .sort({ name: 1 });
+
+    const total = await Bin.countDocuments(filter);
+
+    res.json({
+      success: true,
+      data: bins,
+      total,
+      totalPages: Math.ceil(total / limit),
+      page: Number(page),
       pagination: { total, page: Number(page), pages: Math.ceil(total / limit) }
     });
   } catch (error) {
@@ -94,18 +124,21 @@ exports.getBinHistory = async (req, res) => {
 // POST /api/bins (admin)
 exports.createBin = async (req, res) => {
   try {
-    const { binId, name, zone, address, latitude, longitude, wasteType, alertThresholds } = req.body;
+    const { binId, name, zone, address, latitude, longitude, wasteType, alertThresholds, location } = req.body;
+    const lat = latitude ?? location?.coordinates?.[1];
+    const lng = longitude ?? location?.coordinates?.[0];
+    const resolvedName = name || binId;
 
-    if (!binId || !name || !zone || !latitude || !longitude) {
+    if (!binId || !resolvedName || !zone || lat === undefined || lng === undefined) {
       return res.status(400).json({ success: false, message: 'Champs obligatoires manquants' });
     }
 
     const bin = await Bin.create({
       binId,
-      name,
+      name: resolvedName,
       zone,
       address,
-      location: { type: 'Point', coordinates: [parseFloat(longitude), parseFloat(latitude)] },
+      location: { type: 'Point', coordinates: [parseFloat(lng), parseFloat(lat)] },
       wasteType: wasteType || 'mixed',
       alertThresholds: alertThresholds || { attention: 80, critical: 95 }
     });
@@ -123,8 +156,10 @@ exports.updateBin = async (req, res) => {
     const updates = {};
     allowed.forEach(field => { if (req.body[field] !== undefined) updates[field] = req.body[field]; });
 
-    if (req.body.latitude && req.body.longitude) {
-      updates.location = { type: 'Point', coordinates: [parseFloat(req.body.longitude), parseFloat(req.body.latitude)] };
+    const lat = req.body.latitude ?? req.body.location?.coordinates?.[1];
+    const lng = req.body.longitude ?? req.body.location?.coordinates?.[0];
+    if (lat !== undefined && lng !== undefined) {
+      updates.location = { type: 'Point', coordinates: [parseFloat(lng), parseFloat(lat)] };
     }
 
     const bin = await Bin.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });

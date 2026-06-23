@@ -6,6 +6,7 @@ const { protect, authorize } = require('../middleware/auth');
 router.post('/register', auth.register);
 router.post('/login', auth.login);
 router.post('/refresh', auth.refreshToken);
+router.post('/refresh-token', auth.refreshToken);
 router.post('/logout', protect, auth.logout);
 router.post('/forgot-password', auth.forgotPassword);
 router.post('/reset-password/:token', auth.resetPassword);

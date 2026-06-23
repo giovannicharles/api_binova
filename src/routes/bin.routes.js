@@ -4,6 +4,7 @@ const bin = require('../controllers/bin.controller');
 const { protect, authorize } = require('../middleware/auth');
 
 router.get('/', protect, bin.getBins);
+router.get('/my', protect, bin.getMyBins);
 router.get('/zones', protect, bin.getZones);
 router.get('/map/geojson', protect, bin.getBinsGeoJSON);
 router.get('/:id', protect, bin.getBin);

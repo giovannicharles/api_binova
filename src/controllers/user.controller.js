@@ -3,7 +3,7 @@ const User = require('../models/User');
 // GET /api/users (admin)
 exports.getUsers = async (req, res) => {
   try {
-    const { role, zone, isActive, page = 1, limit = 20, search } = req.query;
+    const { role, zone, isActive, page = 1, limit = 20, search, sort } = req.query;
     const filter = {};
     if (role) filter.role = role;
     if (zone) filter.zone = zone;
@@ -17,15 +17,34 @@ exports.getUsers = async (req, res) => {
       ];
     }
 
+    // Parse sort parameter (format: field or -field for descending)
+    let sortObj = { createdAt: -1 };
+    if (sort) {
+      const sortField = sort.startsWith('-') ? sort.substring(1) : sort;
+      const sortDirection = sort.startsWith('-') ? -1 : 1;
+      // Validate sort field to prevent injection
+      const allowedSortFields = ['name', 'email', 'points', 'createdAt', 'zone', 'role'];
+      if (allowedSortFields.includes(sortField)) {
+        sortObj = { [sortField]: sortDirection };
+      }
+    }
+
     const users = await User.find(filter)
       .select('-passwordHash -twoFactorSecret -twoFactorBackupCodes -refreshTokens -resetPasswordToken')
-      .sort({ createdAt: -1 })
+      .sort(sortObj)
       .limit(limit * 1)
       .skip((page - 1) * limit);
 
     const total = await User.countDocuments(filter);
 
-    res.json({ success: true, data: users, pagination: { total, page: Number(page), pages: Math.ceil(total / limit) } });
+    res.json({
+      success: true,
+      data: users,
+      total,
+      totalPages: Math.ceil(total / limit),
+      page: Number(page),
+      pagination: { total, page: Number(page), pages: Math.ceil(total / limit) }
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

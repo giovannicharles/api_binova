@@ -19,7 +19,14 @@ exports.getTours = async (req, res) => {
       .skip((page - 1) * limit);
 
     const total = await Tour.countDocuments(filter);
-    res.json({ success: true, data: tours, pagination: { total, page: Number(page), pages: Math.ceil(total / limit) } });
+    res.json({
+      success: true,
+      data: tours,
+      total,
+      totalPages: Math.ceil(total / limit),
+      page: Number(page),
+      pagination: { total, page: Number(page), pages: Math.ceil(total / limit) }
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -28,19 +35,38 @@ exports.getTours = async (req, res) => {
 // POST /api/tours
 exports.createTour = async (req, res) => {
   try {
-    const { name, type, collector, binIds, zone, scheduledAt, notes } = req.body;
-    if (!name || !binIds?.length || !scheduledAt) {
+    const {
+      name,
+      type,
+      collector,
+      binIds,
+      bins,
+      zone,
+      scheduledAt,
+      scheduledDate,
+      notes
+    } = req.body;
+
+    const normalizedBinIds = Array.isArray(binIds) && binIds.length
+      ? binIds
+      : Array.isArray(bins)
+        ? bins.map((b) => (typeof b === 'string' ? b : b?.bin)).filter(Boolean)
+        : [];
+    const normalizedSchedule = scheduledAt || scheduledDate;
+    const resolvedName = name || `Tournee ${zone || ''}`.trim();
+
+    if (!resolvedName || !normalizedBinIds.length || !normalizedSchedule) {
       return res.status(400).json({ success: false, message: 'Champs obligatoires manquants' });
     }
 
-    const bins = binIds.map((id, idx) => ({ bin: id, order: idx + 1 }));
+    const mappedBins = normalizedBinIds.map((id, idx) => ({ bin: id, order: idx + 1 }));
     const tour = await Tour.create({
-      name,
+      name: resolvedName,
       type: type || 'manual',
       collector,
-      bins,
+      bins: mappedBins,
       zone,
-      scheduledAt: new Date(scheduledAt),
+      scheduledAt: new Date(normalizedSchedule),
       notes,
       createdBy: req.user._id
     });

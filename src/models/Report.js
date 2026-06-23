@@ -49,7 +49,11 @@ const reportSchema = new mongoose.Schema({
   address: { type: String, trim: true },
   zone: { type: String, required: true },
   photos: [{ type: String }],
-  bin: { type: mongoose.Schema.Types.ObjectId, ref: 'Bin', default: null },
+  bin: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Bin',
+    required: [true, 'Le bac est obligatoire']
+  },
   assignedTo: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

@@ -23,6 +23,9 @@ const iotRoutes = require('./routes/iot.routes');
 const notificationRoutes = require('./routes/notification.routes');
 const awarenessRoutes = require('./routes/awareness.routes');
 const tourRoutes = require('./routes/tour.routes');
+const activityRoutes = require('./routes/activity.routes');
+const exportRoutes = require('./routes/export.routes');
+const importRoutes = require('./routes/import.routes');
 
 const app = express();
 const server = http.createServer(app);
@@ -91,6 +94,9 @@ app.use('/api/iot', iotRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/awareness', awarenessRoutes);
 app.use('/api/tours', tourRoutes);
+app.use('/api/activities', activityRoutes);
+app.use('/api/export', exportRoutes);
+app.use('/api/import', importRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

@@ -35,6 +35,7 @@ const sanitizeUser = (user) => ({
 // POST /api/auth/register
 exports.register = async (req, res) => {
   try {
+    console.log(req.body);
     const { cni, phone, email, password, confirmPassword, name, zone } = req.body;
 
     if (!cni || !phone || !email || !password || !name || !zone) {
@@ -79,12 +80,13 @@ exports.register = async (req, res) => {
     res.status(201).json({
       success: true,
       message: 'Compte créé avec succès. Bienvenue sur BINOVA ! 🌿',
+      token: accessToken,
       accessToken,
       refreshToken,
       user: sanitizeUser(user)
     });
   } catch (error) {
-    next ? next(error) : res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -168,6 +170,7 @@ exports.login = async (req, res) => {
     res.json({
       success: true,
       message: `Bienvenue, ${user.name} !`,
+      token: accessToken,
       accessToken,
       refreshToken,
       user: sanitizeUser(user)
@@ -202,7 +205,7 @@ exports.refreshToken = async (req, res) => {
     });
     await user.save();
 
-    res.json({ success: true, accessToken, refreshToken: newRefreshToken });
+    res.json({ success: true, token: accessToken, accessToken, refreshToken: newRefreshToken });
   } catch (error) {
     res.status(401).json({ success: false, message: 'Refresh token invalide' });
   }
