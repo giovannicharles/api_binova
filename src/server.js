@@ -28,6 +28,7 @@ const exportRoutes = require('./routes/export.routes');
 const importRoutes = require('./routes/import.routes');
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 // Init Socket.io
